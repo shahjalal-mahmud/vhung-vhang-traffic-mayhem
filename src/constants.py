@@ -1,5 +1,7 @@
 """All fixed constants for VhungVhang: Traffic Mayhem."""
 
+from types import SimpleNamespace
+
 # --- Window / timing (coordinate system: origin top-left, +y points DOWN) ---
 WIDTH = 1000
 HEIGHT = 700
@@ -57,16 +59,28 @@ COLORS = {
 
 # --- Vehicle specs: sizes/speeds in px and px/s, patience in seconds ---
 VEHICLE_SPECS = {
-    "rickshaw": dict(length=44, width=26, max_speed=90, points=10,
-                     patience=6, weight=20, color=(236, 92, 140)),
-    "cng": dict(length=50, width=28, max_speed=120, points=10,
-                patience=6, weight=20, color=(52, 168, 98)),
-    "motorcycle": dict(length=34, width=16, max_speed=170, points=10,
-                       patience=4, weight=20, color=(64, 122, 232)),
-    "car": dict(length=58, width=30, max_speed=140, points=10,
-                patience=8, weight=20, color=(240, 196, 52)),
-    "bus": dict(length=100, width=36, max_speed=100, points=25,
-                patience=12, weight=10, color=(250, 140, 40)),
-    "truck": dict(length=90, width=34, max_speed=95, points=20,
-                  patience=10, weight=10, color=(132, 98, 210)),
+    "rickshaw": SimpleNamespace(
+        length=44, width=26, max_speed=90, points=10,
+        patience=6, weight=20, color=(236, 92, 140)
+    ),
+    "cng": SimpleNamespace(
+        length=50, width=28, max_speed=120, points=10,
+        patience=6, weight=20, color=(52, 168, 98)
+    ),
+    "motorcycle": SimpleNamespace(
+        length=34, width=16, max_speed=170, points=10,
+        patience=4, weight=20, color=(64, 122, 232)
+    ),
+    "car": SimpleNamespace(
+        length=58, width=30, max_speed=140, points=10,
+        patience=8, weight=20, color=(240, 196, 52)
+    ),
+    "bus": SimpleNamespace(
+        length=100, width=36, max_speed=100, points=25,
+        patience=12, weight=10, color=(250, 140, 40)
+    ),
+    "truck": SimpleNamespace(
+        length=90, width=34, max_speed=95, points=20,
+        patience=10, weight=10, color=(132, 98, 210)
+    ),
 }
