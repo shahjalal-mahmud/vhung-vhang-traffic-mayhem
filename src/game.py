@@ -110,11 +110,9 @@ class Game:
     def _on_key_playing(self, key: int) -> None:
         """Keys that work while playing."""
         if key == pygame.K_1:
-            print("[signal] North-South requested")
-            self.signals.request("NS")
+            self.signals.request("NS")  # key 1: North-South wants green
         elif key == pygame.K_2:
-            print("[signal] East-West requested")
-            self.signals.request("EW")
+            self.signals.request("EW")  # key 2: East-West wants green
         elif key == pygame.K_p:
             self.state = STATE_PAUSED
         elif key == pygame.K_r:
@@ -162,8 +160,8 @@ class Game:
     def _draw_scene(self) -> None:
         """Draw the world back-to-front (painter's algorithm)."""
         self.road.draw(self.screen)
-        self.traffic.draw(self.screen)
         self.signals.draw(self.screen)
+        self.traffic.draw(self.screen)
         self.effects.draw(self.screen)
         self.ui.draw_hud(self.screen, self.score, self.signals)
 
