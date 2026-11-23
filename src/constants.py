@@ -15,6 +15,7 @@ ROAD_W = 140
 LANE_W = 70  # intersection square is CX±70, CY±70
 CROSSWALK_W = 20  # crosswalk thickness, directly outside the square
 STOP_DIST = 100  # stop line distance from center along the axis
+SPAWN_MARGIN = 60  # vehicles spawn this far outside the screen edge
 
 # --- Game states ---
 STATE_MENU = "menu"
