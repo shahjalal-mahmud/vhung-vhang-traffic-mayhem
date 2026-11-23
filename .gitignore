@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Game runtime data
+highscore.json
+
+# Build output
+build/
+dist/
+*.spec
