@@ -244,9 +244,18 @@ class UI:
             a = 160 + int(95 * abs(math.sin(t * 6)))
             label(surface, f"NEXT: {'N-S' if pend == 'NS' else 'E-W'}", 22,
                   COLORS["yellow"], (750, 28), "midleft", True, alpha=a)
+        sx, sy = WIDTH - 36, 29  # speaker icon = polygon + arcs (or a cross)
+        col = COLORS["red"] if self.muted else COLORS["white"]
+        pygame.draw.polygon(surface, col, [(sx - 13, sy - 5), (sx - 7, sy - 5),
+                                           (sx, sy - 11), (sx, sy + 11),
+                                           (sx - 7, sy + 5), (sx - 13, sy + 5)])
         if self.muted:
-            label(surface, "MUTED", 16, COLORS["red"], (WIDTH - 14, 28),
-                  "midright", True)
+            pygame.draw.line(surface, col, (sx + 6, sy - 7), (sx + 16, sy + 7), 3)
+            pygame.draw.line(surface, col, (sx + 16, sy - 7), (sx + 6, sy + 7), 3)
+        else:
+            for r in (7, 13):
+                pygame.draw.arc(surface, col, (sx + 2 - r, sy - r, 2 * r, 2 * r),
+                                -0.9, 0.9, 2)
         self._event_text(surface, score_mgr)
         translucent(surface, (0, HEIGHT - 34, WIDTH, 34), (14, 18, 36), 150)
         label(surface, "1 = North-South  |  2 = East-West  |  P = Pause", 20,

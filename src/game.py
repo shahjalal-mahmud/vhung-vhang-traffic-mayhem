@@ -49,6 +49,7 @@ class Game:
         self.audio = AudioManager()
         self.effects = EffectsSystem()
         self._fps_font = pygame.font.Font(None, 24)
+        self._world = pygame.Surface((WIDTH, HEIGHT)).convert()  # offscreen buffer
         self._reset_run_state()
 
     def _reset_run_state(self) -> None:
@@ -93,6 +94,8 @@ class Game:
 
     def _apply_action(self, action: str) -> None:
         """Run a UI action string ('play','help','back','quit','restart','menu')."""
+        if action not in ("play", "restart"):  # those play the "start" jingle
+            self.audio.play("click")
         if action in ("play", "restart"):
             self.start_game()
         elif action == "help":
@@ -112,7 +115,7 @@ class Game:
             return
         if key == pygame.K_m:  # M = mute / unmute (works in every state)
             self.audio.toggle_mute()
-            self.ui.muted = not self.ui.muted
+            self.ui.muted = self.audio.muted
             return
         if self.state == STATE_MENU:
             if key in _ENTER_KEYS:
@@ -168,6 +171,7 @@ class Game:
 
     def update(self, dt: float) -> None:
         """Advance the simulation (dt seconds). Only runs while PLAYING."""
+        self.audio.set_ambience(self.state == STATE_PLAYING)  # city hum
         if self.state != STATE_PLAYING:  # PAUSED / MENU / GAME_OVER: frozen
             return
         level = self.score.level
@@ -177,15 +181,27 @@ class Game:
             if v.honk:
                 v.honk = False
                 self.audio.play("horn")
+                self.effects.spawn_bubble((v.x, v.y - 22))
         for v in self.traffic.update(dt, self.signals, level):
+            before = self.score.score
             self.score.add_vehicle(v)  # vehicle left the screen safely
             self.audio.play("pass")
+            self._on_pass(v, self.score.score - before)
         for a, b in self.collisions.update(dt, self.traffic.vehicles):
             self._on_crash(a, b)
         self.effects.update(dt)
         self._track_feedback(dt)
         if self.score.is_game_over:
             self._end_game()
+
+    def _on_pass(self, v, gained: int) -> None:
+        """'+points' (and COMBO) text where the vehicle left the screen."""
+        pos = (min(max(v.x, 70), WIDTH - 70), min(max(v.y, 100), HEIGHT - 70))
+        self.effects.floating_text(pos, f"+{gained}", COLORS["yellow"])
+        if self.score.last_event.startswith("COMBO"):
+            self.effects.floating_text((pos[0], pos[1] - 30),
+                                       f"COMBO x{self.score.combo}",
+                                       COLORS["accent"])
 
     def _on_crash(self, a, b) -> None:
         """One collision = one life. Effects and audio are fire-and-forget."""
@@ -195,7 +211,7 @@ class Game:
         self.effects.spawn_sparks(point)
         self.effects.spawn_smoke(point)
         self.effects.floating_text(point, "CRASH!", COLORS["red"])
-        self.effects.shake(0.35, 8)
+        self.effects.shake(0.4, 8)
         print(f"CRASH: {a.vtype} from {a.approach} x {b.vtype} from {b.approach}")
 
     def _track_feedback(self, dt: float) -> None:
@@ -215,10 +231,16 @@ class Game:
     # -------------------------------------------------------------- drawing
     def _draw_scene(self) -> None:
         """Draw the world back-to-front (painter's algorithm)."""
-        self.road.draw(self.screen)
-        self.signals.draw(self.screen)
-        self.traffic.draw(self.screen)
-        self.effects.draw(self.screen)
+        ox, oy = self.effects.shake_offset if self.state == STATE_PLAYING else (0, 0)
+        shaking = bool(ox or oy)
+        world = self._world if shaking else self.screen  # offscreen only if needed
+        self.road.draw(world)
+        self.signals.draw(world)
+        self.traffic.draw(world)
+        self.effects.draw(world)
+        if shaking:  # translate the whole world; the HUD below stays steady
+            self.screen.fill(COLORS["grass"])
+            self.screen.blit(world, (ox, oy))
         self.ui.draw_hud(self.screen, self.score, self.signals)
         if self.level_banner > 0:  # slide / fade animation lives in the UI
             self.ui.draw_banner(self.screen, self.level_text, self.level_banner)
