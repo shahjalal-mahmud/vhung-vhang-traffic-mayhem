@@ -16,7 +16,7 @@ from .constants import (COLORS, FPS, HEIGHT, MAX_DT, STATE_GAME_OVER,
                         WIDTH)
 from .effects import EffectsSystem
 from .road import Road
-from .scoring import COMBO_EVERY, ScoreManager
+from .scoring import ScoreManager
 from .signals import SignalController
 from .traffic_manager import TrafficManager
 from .ui import UI
@@ -45,12 +45,10 @@ class Game:
         self.chaos = ChaosSystem()
         self.collisions = CollisionSystem()
         self.score = ScoreManager()
-        self.ui = UI()
+        self.ui = UI(self.road)
         self.audio = AudioManager()
         self.effects = EffectsSystem()
         self._fps_font = pygame.font.Font(None, 24)
-        self._mid_font = pygame.font.Font(None, 30)
-        self._big_font = pygame.font.Font(None, 96)
         self._reset_run_state()
 
     def _reset_run_state(self) -> None:
@@ -87,8 +85,9 @@ class Game:
                 self.running = False
                 continue
             action = self.ui.handle_event(event, self.state)
-            if action:
+            if action:  # the UI used this event (click / ENTER on a button)
                 self._apply_action(action)
+                continue
             if event.type == pygame.KEYDOWN:
                 self._on_key(event.key)
 
@@ -110,6 +109,10 @@ class Game:
             return
         if key == pygame.K_F3:
             self.show_fps = not self.show_fps
+            return
+        if key == pygame.K_m:  # M = mute / unmute (works in every state)
+            self.audio.toggle_mute()
+            self.ui.muted = not self.ui.muted
             return
         if self.state == STATE_MENU:
             if key in _ENTER_KEYS:
@@ -160,6 +163,7 @@ class Game:
         """Enter GAME_OVER and save the high score if it was beaten."""
         self.score.save_high_score()
         self.state = STATE_GAME_OVER
+        self.ui.start_game_over()  # shake-in animation starts now
         self.audio.play("gameover")
 
     def update(self, dt: float) -> None:
@@ -216,30 +220,14 @@ class Game:
         self.traffic.draw(self.screen)
         self.effects.draw(self.screen)
         self.ui.draw_hud(self.screen, self.score, self.signals)
-        self._draw_play_text()
-
-    def _draw_play_text(self) -> None:
-        """Placeholder combo / event / level-up text (Phase 8 UI takes over)."""
-        s = self.score
-        draw_text_shadow(self.screen, f"Combo: {s.combo}/{COMBO_EVERY}",
-                         self._mid_font, COLORS["accent"], (14, 78))
-        if self._event_timer > 0 and s.last_event:
-            color = COLORS["red"] if s.last_event.startswith("CRASH") \
-                else COLORS["yellow"]
-            draw_text_shadow(self.screen, s.last_event, self._mid_font,
-                             color, (14, 106))
-        if self.level_banner > 0:
-            alpha = int(255 * min(1.0, self.level_banner / _FADE))  # alpha blend
-            for dx, col in ((3, COLORS["black"]), (0, COLORS["yellow"])):
-                img = self._big_font.render(self.level_text, True, col)
-                img.set_alpha(alpha)
-                self.screen.blit(img, img.get_rect(
-                    center=(WIDTH // 2 + dx, 150 + dx)))
+        if self.level_banner > 0:  # slide / fade animation lives in the UI
+            self.ui.draw_banner(self.screen, self.level_text, self.level_banner)
 
     def draw(self) -> None:
         """Render the current state into the back buffer."""
         if self.state == STATE_MENU:
-            self.ui.draw_menu(self.screen, pygame.mouse.get_pos())
+            self.ui.draw_menu(self.screen, pygame.mouse.get_pos(),
+                                self.score.high_score)
         elif self.state == STATE_HELP:
             self.ui.draw_help(self.screen)
         else:
