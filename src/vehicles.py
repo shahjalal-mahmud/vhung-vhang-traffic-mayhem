@@ -43,6 +43,7 @@ class Vehicle:
         self.state = "moving"  # "moving" | "stopped" | "crashed"
         self.wait_time = 0.0
         self.ignores_signal = False
+        self.honk = False  # set True by ChaosSystem; Game reads and clears it
         self.scored = False
         self.alive = True
         self.crash_timer = 0.0

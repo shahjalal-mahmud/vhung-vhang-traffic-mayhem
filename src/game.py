@@ -145,13 +145,18 @@ class Game:
         level = self.score.level
         self.signals.update(dt)
         self.chaos.update(dt, self.traffic.vehicles, level)
+        for v in self.traffic.vehicles:  # honk warning from impatient drivers
+            if getattr(v, "honk", False):
+                v.honk = False
+                self.audio.play("horn")
         for v in self.traffic.update(dt, self.signals, level):
             self.score.add_vehicle(v)
             self.audio.play("pass")
-        for a, _b in self.collisions.update(dt, self.traffic.vehicles):
+        for a, b in self.collisions.update(dt, self.traffic.vehicles):
             self.score.lose_life()
             self.audio.play("crash")
-            self.effects.spawn_sparks((a.x, a.y))
+            self.effects.spawn_sparks(self.collisions.get_crash_point(a, b))
+            print(f"CRASH: {a.vtype} from {a.approach} x {b.vtype} from {b.approach}")
         self.effects.update(dt)
         if self.score.is_game_over:
             self._end_game()
