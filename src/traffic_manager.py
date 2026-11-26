@@ -93,7 +93,7 @@ class TrafficManager:
         if self._timer > 0.0:
             return
         if self._try_spawn(level):
-            self._timer = spawn_interval(level) * self._rng.uniform(0.8, 1.25)
+            self._timer = spawn_interval(level)  # jitter (+-15%) is in difficulty.py
         else:
             self._timer = _RETRY  # blocked: try again soon
 

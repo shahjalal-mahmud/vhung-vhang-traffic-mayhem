@@ -55,8 +55,9 @@ class UI:
         draw_text_shadow(surface, info, self.font, COLORS["white"], (14, 10))
         draw_text_shadow(surface, f"Signal: {signals.state}", self.small,
                          COLORS["yellow"], (14, 46))
-        draw_text_shadow(surface, "[debug] L = lose life, K = +50 score",
-                         self.small, COLORS["white"], (14, HEIGHT - 30))
+        draw_text_shadow(surface, "1 = N-S green   2 = E-W green   "
+                         "P = pause   R = restart", self.small,
+                         COLORS["white"], (14, HEIGHT - 30))
 
     def draw_pause(self, surface: pygame.Surface) -> None:
         """Placeholder pause overlay."""

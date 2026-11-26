@@ -1,4 +1,9 @@
-"""Game class: window, state machine and main loop (double buffered)."""
+"""Game class (Phase 7): state machine, gameplay loop, double-buffered main loop.
+
+CG concepts: double buffering (draw to the back buffer, display.flip() swaps),
+time-based animation (dt in seconds), painter's algorithm (back-to-front),
+alpha blending (fading level banner).
+"""
 from __future__ import annotations
 
 import pygame
@@ -11,13 +16,16 @@ from .constants import (COLORS, FPS, HEIGHT, MAX_DT, STATE_GAME_OVER,
                         WIDTH)
 from .effects import EffectsSystem
 from .road import Road
-from .scoring import ScoreManager
+from .scoring import COMBO_EVERY, ScoreManager
 from .signals import SignalController
 from .traffic_manager import TrafficManager
 from .ui import UI
 from .utils import draw_text_shadow
 
 _ENTER_KEYS = (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE)
+_BANNER_TIME = 2.0   # seconds the "LEVEL n!" text stays on screen
+_EVENT_TIME = 2.0    # seconds the "+10" / "CRASH!" text stays on screen
+_FADE = 0.5          # banner fades out during its last half second
 
 
 class Game:
@@ -31,7 +39,7 @@ class Game:
         self.running = True
         self.show_fps = False
         self.state = STATE_MENU
-        self.road = Road()
+        self.road = Road()  # static background: built once, kept between runs
         self.signals = SignalController()
         self.traffic = TrafficManager()
         self.chaos = ChaosSystem()
@@ -41,6 +49,17 @@ class Game:
         self.audio = AudioManager()
         self.effects = EffectsSystem()
         self._fps_font = pygame.font.Font(None, 24)
+        self._mid_font = pygame.font.Font(None, 30)
+        self._big_font = pygame.font.Font(None, 96)
+        self._reset_run_state()
+
+    def _reset_run_state(self) -> None:
+        """Level banner / event text bookkeeping for a fresh run."""
+        self.level_banner = 0.0
+        self.level_text = ""
+        self._last_level = 1
+        self._seen_event = 0
+        self._event_timer = 0.0
 
     # ------------------------------------------------------------ main loop
     def run(self) -> None:
@@ -52,7 +71,13 @@ class Game:
             self.update(dt)
             self.draw()
             pygame.display.flip()
+        self._shutdown()
         pygame.quit()
+
+    def _shutdown(self) -> None:
+        """Keep a good score even if the player quits mid-game."""
+        if self.state in (STATE_PLAYING, STATE_PAUSED):
+            self.score.save_high_score()
 
     # --------------------------------------------------------------- events
     def handle_events(self) -> None:
@@ -68,8 +93,8 @@ class Game:
                 self._on_key(event.key)
 
     def _apply_action(self, action: str) -> None:
-        """Run a UI action string."""
-        if action == "play" or action == "restart":
+        """Run a UI action string ('play','help','back','quit','restart','menu')."""
+        if action in ("play", "restart"):
             self.start_game()
         elif action == "help":
             self.state = STATE_HELP
@@ -117,49 +142,71 @@ class Game:
             self.state = STATE_PAUSED
         elif key == pygame.K_r:
             self.start_game()
-        elif key == pygame.K_l:  # temporary debug key (Phase 1 only)
-            self.score.lose_life()
-        elif key == pygame.K_k:  # temporary debug key (Phase 1 only)
-            self.score.score += 50
 
     # ---------------------------------------------------------- state logic
     def start_game(self) -> None:
-        """Reset all subsystems and enter PLAYING."""
+        """Reset every subsystem (the road stays) and enter PLAYING."""
         self.signals.reset()
         self.traffic.reset()
+        self.chaos = ChaosSystem()
+        self.collisions = CollisionSystem()
         self.score.reset()
         self.effects = EffectsSystem()
+        self._reset_run_state()
         self.state = STATE_PLAYING
         self.audio.play("start")
 
     def _end_game(self) -> None:
-        """Enter GAME_OVER and save the high score."""
+        """Enter GAME_OVER and save the high score if it was beaten."""
         self.score.save_high_score()
         self.state = STATE_GAME_OVER
         self.audio.play("gameover")
 
     def update(self, dt: float) -> None:
-        """Advance the simulation (dt in seconds). Only runs while PLAYING."""
-        if self.state != STATE_PLAYING:
+        """Advance the simulation (dt seconds). Only runs while PLAYING."""
+        if self.state != STATE_PLAYING:  # PAUSED / MENU / GAME_OVER: frozen
             return
         level = self.score.level
         self.signals.update(dt)
         self.chaos.update(dt, self.traffic.vehicles, level)
         for v in self.traffic.vehicles:  # honk warning from impatient drivers
-            if getattr(v, "honk", False):
+            if v.honk:
                 v.honk = False
                 self.audio.play("horn")
         for v in self.traffic.update(dt, self.signals, level):
-            self.score.add_vehicle(v)
+            self.score.add_vehicle(v)  # vehicle left the screen safely
             self.audio.play("pass")
         for a, b in self.collisions.update(dt, self.traffic.vehicles):
-            self.score.lose_life()
-            self.audio.play("crash")
-            self.effects.spawn_sparks(self.collisions.get_crash_point(a, b))
-            print(f"CRASH: {a.vtype} from {a.approach} x {b.vtype} from {b.approach}")
+            self._on_crash(a, b)
         self.effects.update(dt)
+        self._track_feedback(dt)
         if self.score.is_game_over:
             self._end_game()
+
+    def _on_crash(self, a, b) -> None:
+        """One collision = one life. Effects and audio are fire-and-forget."""
+        self.score.lose_life()
+        point = self.collisions.get_crash_point(a, b)
+        self.audio.play("crash")
+        self.effects.spawn_sparks(point)
+        self.effects.spawn_smoke(point)
+        self.effects.floating_text(point, "CRASH!", COLORS["red"])
+        self.effects.shake(0.35, 8)
+        print(f"CRASH: {a.vtype} from {a.approach} x {b.vtype} from {b.approach}")
+
+    def _track_feedback(self, dt: float) -> None:
+        """Level-up banner (2 s) and short score/combo event text (2 s)."""
+        self.level_banner = max(0.0, self.level_banner - dt)
+        self._event_timer = max(0.0, self._event_timer - dt)
+        level = self.score.level
+        if level > self._last_level:
+            self._last_level = level
+            self.level_text = f"LEVEL {level}!"
+            self.level_banner = _BANNER_TIME
+            self.audio.play("click")
+        if self.score.event_id != self._seen_event:
+            self._seen_event = self.score.event_id
+            self._event_timer = _EVENT_TIME
 
     # -------------------------------------------------------------- drawing
     def _draw_scene(self) -> None:
@@ -169,6 +216,25 @@ class Game:
         self.traffic.draw(self.screen)
         self.effects.draw(self.screen)
         self.ui.draw_hud(self.screen, self.score, self.signals)
+        self._draw_play_text()
+
+    def _draw_play_text(self) -> None:
+        """Placeholder combo / event / level-up text (Phase 8 UI takes over)."""
+        s = self.score
+        draw_text_shadow(self.screen, f"Combo: {s.combo}/{COMBO_EVERY}",
+                         self._mid_font, COLORS["accent"], (14, 78))
+        if self._event_timer > 0 and s.last_event:
+            color = COLORS["red"] if s.last_event.startswith("CRASH") \
+                else COLORS["yellow"]
+            draw_text_shadow(self.screen, s.last_event, self._mid_font,
+                             color, (14, 106))
+        if self.level_banner > 0:
+            alpha = int(255 * min(1.0, self.level_banner / _FADE))  # alpha blend
+            for dx, col in ((3, COLORS["black"]), (0, COLORS["yellow"])):
+                img = self._big_font.render(self.level_text, True, col)
+                img.set_alpha(alpha)
+                self.screen.blit(img, img.get_rect(
+                    center=(WIDTH // 2 + dx, 150 + dx)))
 
     def draw(self) -> None:
         """Render the current state into the back buffer."""
